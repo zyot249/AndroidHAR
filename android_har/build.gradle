@@ -64,6 +64,7 @@ bintray {
     publish = true
     override = true
     pkg {
+        userOrg = 'zyot'
         repo = 'android_har'
         name = libraryArtifactId
         desc = 'Here is my library description'
