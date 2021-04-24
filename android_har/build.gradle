@@ -1,8 +1,8 @@
 plugins {
     id 'com.android.library'
+    id 'com.jfrog.bintray'
+    id 'maven-publish'
 }
-apply plugin: 'com.github.dcendents.android-maven'
-apply plugin: 'com.jfrog.bintray'
 
 android {
     compileSdkVersion 30
@@ -40,35 +40,39 @@ dependencies {
     implementation 'org.tensorflow:tensorflow-android:1.13.1'
 }
 
-install {
-    repositories.mavenInstaller {
-        pom.project {
-            packaging 'aar'
-            group "zyot.shyn"
-            artifactId "AndroidHAR"
-            version "0.0.1"
+def libraryGroupId = 'zyot.shyn'
+def libraryArtifactId = 'android_har_test'
+def libraryVersion = '1.0.0'
+afterEvaluate {
+    publishing {
+        publications {
+            // Creates a Maven publication called "release".
+            release(MavenPublication) {
+                from components.release
+                groupId = libraryGroupId
+                artifactId = libraryArtifactId
+                version = libraryVersion
+            }
         }
     }
 }
 
 bintray {
-    user = "zyot249"
-    key =  "a5847d3f8583a0f7f3c232e16d7e8a7bf9c6f444"
-
-    configurations = ['archives']
+    user = project.property('bintray.user')
+    key = project.property('bintray.token')
+    publications = ['release']
+    publish = true
+    override = true
     pkg {
-        repo = 'android_har'  // đây là repo bạn tạo trên Bintray . nếu k có sẽ báo lỗi HTTP 404
-        name = 'AndroidHAR'
-        userOrg = 'zyot'
+        repo = 'android_har'
+        name = libraryArtifactId
+        desc = 'Here is my library description'
         licenses = ['Apache-2.0']
-        publish = true
-        vcsUrl = 'https://github.com/zyot249/AndroidHAR.git'  // đây là repo  trên git bạn đã tạo ở bước trên
+        vcsUrl = 'https://github.com/zyot249/AndroidHAR.git'
         publicDownloadNumbers = true
         version {
-            name = '0.0.1'
-            desc = 'Gradle Bintray Plugin 1.0 final'
+            name = libraryVersion
             released = new Date()
-            vcsTag = 'v0.0.1'
         }
     }
 }
