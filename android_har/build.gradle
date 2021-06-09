@@ -44,7 +44,7 @@ dependencies {
 
 def libraryGroupId = 'zyot.shyn'
 def libraryArtifactId = 'android_har'
-def libraryVersion = '1.0.0'
+def libraryVersion = '1.0.1'
 afterEvaluate {
     publishing {
         publications {
