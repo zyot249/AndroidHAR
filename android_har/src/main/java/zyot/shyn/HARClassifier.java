@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
 
-import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 import org.tensorflow.lite.Interpreter;
 
 import java.io.FileInputStream;
@@ -15,42 +14,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class HARClassifier {
-//    static {
-//        System.loadLibrary("tensorflow_inference");
-//    }
-
-//    private static final String MODEL_FILE = "file:///android_asset/frozen_HAR_model.pb";
-//    private static final String INPUT_NODE = "LSTM_1_input";
-//    private static final String[] OUTPUT_NODES = {"Dense_2/Softmax"};
-//    private static final String OUTPUT_NODE = "Dense_2/Softmax";
     private static final int[] INPUT_SIZE = {1, 100, 12};
     private static final int OUTPUT_SIZE = 7;
     public static final int N_SAMPLES = 100;
-
-//    private TensorFlowInferenceInterface inferenceInterface;
 
     private static final String TF_MODEL_FILE = "har_tflite_retrain.tflite";
 
     private Interpreter interpreter;
 
     public HARClassifier(final Context context) {
-//        inferenceInterface = new TensorFlowInferenceInterface(context.getAssets(), MODEL_FILE);
         try {
             interpreter = new Interpreter(loadModelFile(context.getAssets(), TF_MODEL_FILE), new Interpreter.Options());
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
-//    public float[] predictProbabilities(float[] data) {
-//        float[] result = new float[OUTPUT_SIZE];
-//        inferenceInterface.feed(INPUT_NODE, data, INPUT_SIZE);
-//        inferenceInterface.run(OUTPUT_NODES);
-//        inferenceInterface.fetch(OUTPUT_NODE, result);
-//
-//        //Biking   Downstairs	 Jogging	  Sitting	Standing	Upstairs	Walking
-//        return result;
-//    }
 
     public float[] predict(float[][][] input) {
         float[][] result = new float[1][OUTPUT_SIZE];
