@@ -13,7 +13,11 @@ public class ActivityPrediction {
         return probability;
     }
 
-    public HumanActivity getActivityIdx() {
+    public HumanActivity getActivity() {
         return HumanActivity.getHumanActivity(activityIdx);
+    }
+
+    public int getActivityIdx() {
+        return activityIdx;
     }
 }
