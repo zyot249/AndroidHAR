@@ -1,39 +1,61 @@
 package zyot.shyn;
 
 import android.content.Context;
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
 
 import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
+import org.tensorflow.lite.Interpreter;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 
 public class HARClassifier {
-    static {
-        System.loadLibrary("tensorflow_inference");
-    }
+//    static {
+//        System.loadLibrary("tensorflow_inference");
+//    }
 
-    private static final String MODEL_FILE = "file:///android_asset/frozen_HAR_model.pb";
-    private static final String INPUT_NODE = "LSTM_1_input";
-    private static final String[] OUTPUT_NODES = {"Dense_2/Softmax"};
-    private static final String OUTPUT_NODE = "Dense_2/Softmax";
-    private static final long[] INPUT_SIZE = {1, 100, 12};
+//    private static final String MODEL_FILE = "file:///android_asset/frozen_HAR_model.pb";
+//    private static final String INPUT_NODE = "LSTM_1_input";
+//    private static final String[] OUTPUT_NODES = {"Dense_2/Softmax"};
+//    private static final String OUTPUT_NODE = "Dense_2/Softmax";
+    private static final int[] INPUT_SIZE = {1, 100, 12};
     private static final int OUTPUT_SIZE = 7;
     public static final int N_SAMPLES = 100;
 
-    private TensorFlowInferenceInterface inferenceInterface;
+//    private TensorFlowInferenceInterface inferenceInterface;
+
+    private static final String TF_MODEL_FILE = "har_tflite_retrain.tflite";
+
+    private Interpreter interpreter;
 
     public HARClassifier(final Context context) {
-        inferenceInterface = new TensorFlowInferenceInterface(context.getAssets(), MODEL_FILE);
+//        inferenceInterface = new TensorFlowInferenceInterface(context.getAssets(), MODEL_FILE);
+        try {
+            interpreter = new Interpreter(loadModelFile(context.getAssets(), TF_MODEL_FILE), new Interpreter.Options());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
-    public float[] predictProbabilities(float[] data) {
-        float[] result = new float[OUTPUT_SIZE];
-        inferenceInterface.feed(INPUT_NODE, data, INPUT_SIZE);
-        inferenceInterface.run(OUTPUT_NODES);
-        inferenceInterface.fetch(OUTPUT_NODE, result);
+//    public float[] predictProbabilities(float[] data) {
+//        float[] result = new float[OUTPUT_SIZE];
+//        inferenceInterface.feed(INPUT_NODE, data, INPUT_SIZE);
+//        inferenceInterface.run(OUTPUT_NODES);
+//        inferenceInterface.fetch(OUTPUT_NODE, result);
+//
+//        //Biking   Downstairs	 Jogging	  Sitting	Standing	Upstairs	Walking
+//        return result;
+//    }
 
-        //Biking   Downstairs	 Jogging	  Sitting	Standing	Upstairs	Walking
-        return result;
+    public float[] predict(float[][][] input) {
+        float[][] result = new float[1][OUTPUT_SIZE];
+        interpreter.run(input, result);
+        return result[0];
     }
 
     public ArrayList<Float> predictHumanActivityProbs(List<Float> ax, List<Float> ay, List<Float> az,
@@ -45,10 +67,10 @@ public class HARClassifier {
                 && lx.size() >= N_SAMPLES && ly.size() >= N_SAMPLES && lz.size() >= N_SAMPLES
                 && gx.size() >= N_SAMPLES && gy.size() >= N_SAMPLES && gz.size() >= N_SAMPLES
         ) {
-            List<Float> data = new ArrayList<>();
             List<Float> ma = new ArrayList<>();
             List<Float> ml = new ArrayList<>();
             List<Float> mg = new ArrayList<>();
+            samplingData(ax, ay, az, lx, ly, lz, gx, gy, gz);
 
             double maValue;
             double mgValue;
@@ -64,23 +86,8 @@ public class HARClassifier {
                 mg.add((float) mgValue);
             }
 
-            data.addAll(ax.subList(0, N_SAMPLES));
-            data.addAll(ay.subList(0, N_SAMPLES));
-            data.addAll(az.subList(0, N_SAMPLES));
-
-            data.addAll(lx.subList(0, N_SAMPLES));
-            data.addAll(ly.subList(0, N_SAMPLES));
-            data.addAll(lz.subList(0, N_SAMPLES));
-
-            data.addAll(gx.subList(0, N_SAMPLES));
-            data.addAll(gy.subList(0, N_SAMPLES));
-            data.addAll(gz.subList(0, N_SAMPLES));
-
-            data.addAll(ma.subList(0, N_SAMPLES));
-            data.addAll(ml.subList(0, N_SAMPLES));
-            data.addAll(mg.subList(0, N_SAMPLES));
-
-            float[] resultsArr = predictProbabilities(toFloatArray(data));
+            float[][][] input = reshapeInput(ax, ay, az, lx, ly, lz, gx, gy, gz, ma, ml, mg);
+            float[] resultsArr = predict(input);
             results = new ArrayList<>();
             for (int i = 0; i < OUTPUT_SIZE; i++)
                 results.add(resultsArr[i]);
@@ -101,10 +108,49 @@ public class HARClassifier {
         return results;
     }
 
-    public int predictHumanActivity(List<Float> ax, List<Float> ay, List<Float> az,
+    public int predictHumanActivityIndex(List<Float> ax, List<Float> ay, List<Float> az,
                                     List<Float> lx, List<Float> ly, List<Float> lz,
                                     List<Float> gx, List<Float> gy, List<Float> gz) {
         return getIndexOfActHavingMaxProb(predictHumanActivityProbs(ax, ay, az, lx, ly, lz, gx, gy, gz));
+    }
+
+    public ActivityPrediction predictHumanActivity(List<Float> ax, List<Float> ay, List<Float> az,
+                                                   List<Float> lx, List<Float> ly, List<Float> lz,
+                                                   List<Float> gx, List<Float> gy, List<Float> gz) {
+        ArrayList<Float> results = predictHumanActivityProbs(ax, ay, az, lx, ly, lz, gx, gy, gz);
+        int index = -1;
+        float max = 0;
+        if (results != null) {
+            for (int i = 0; i < results.size(); i++) {
+                if (results.get(i) > max) {
+                    index = i;
+                    max = results.get(i);
+                }
+            }
+        }
+        return new ActivityPrediction(max, index);
+    }
+
+    public float[][][] reshapeInput(List<Float> ax, List<Float> ay, List<Float> az,
+                                    List<Float> lx, List<Float> ly, List<Float> lz,
+                                    List<Float> gx, List<Float> gy, List<Float> gz,
+                                    List<Float> ma, List<Float> ml, List<Float> mg) {
+        float[][][] input = new float[INPUT_SIZE[0]][INPUT_SIZE[1]][INPUT_SIZE[2]];
+        for (int i = 0; i < N_SAMPLES; i++) {
+            input[0][i][0] = ax.get(i);
+            input[0][i][1] = ay.get(i);
+            input[0][i][2] = az.get(i);
+            input[0][i][3] = lx.get(i);
+            input[0][i][4] = ly.get(i);
+            input[0][i][5] = lz.get(i);
+            input[0][i][6] = gx.get(i);
+            input[0][i][7] = gy.get(i);
+            input[0][i][8] = gz.get(i);
+            input[0][i][9] = ma.get(i);
+            input[0][i][10] = ml.get(i);
+            input[0][i][11] = mg.get(i);
+        }
+        return input;
     }
 
     public static int getIndexOfActHavingMaxProb(ArrayList<Float> arr) {
@@ -121,13 +167,31 @@ public class HARClassifier {
         return index;
     }
 
-    private float[] toFloatArray(List<Float> list) {
-        int i = 0;
-        float[] array = new float[list.size()];
+    private MappedByteBuffer loadModelFile(AssetManager assetManager, String modelPath) throws IOException {
+        AssetFileDescriptor fileDescriptor = assetManager.openFd(modelPath);
+        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = inputStream.getChannel();
+        long startOffset = fileDescriptor.getStartOffset();
+        long declaredLength = fileDescriptor.getDeclaredLength();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+    }
 
-        for (Float f : list) {
-            array[i++] = (f != null ? f : Float.NaN);
+    public void samplingData(List<Float> ax, List<Float> ay, List<Float> az,
+                             List<Float> lx, List<Float> ly, List<Float> lz,
+                             List<Float> gx, List<Float> gy, List<Float> gz) {
+        if (ax.size() >= N_SAMPLES && ay.size() >= N_SAMPLES && az.size() >= N_SAMPLES
+                && lx.size() >= N_SAMPLES && ly.size() >= N_SAMPLES && lz.size() >= N_SAMPLES
+                && gx.size() >= N_SAMPLES && gy.size() >= N_SAMPLES && gz.size() >= N_SAMPLES
+        ) {
+            ax.subList(N_SAMPLES, ax.size()).clear();
+            ay.subList(N_SAMPLES, ay.size()).clear();
+            az.subList(N_SAMPLES, az.size()).clear();
+            lx.subList(N_SAMPLES, lx.size()).clear();
+            ly.subList(N_SAMPLES, ly.size()).clear();
+            lz.subList(N_SAMPLES, lz.size()).clear();
+            gx.subList(N_SAMPLES, gx.size()).clear();
+            gy.subList(N_SAMPLES, gy.size()).clear();
+            gz.subList(N_SAMPLES, gz.size()).clear();
         }
-        return array;
     }
 }
