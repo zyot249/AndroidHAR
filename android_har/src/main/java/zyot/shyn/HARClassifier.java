@@ -18,7 +18,8 @@ public class HARClassifier {
     private static final int OUTPUT_SIZE = 7;
     public static final int N_SAMPLES = 100;
 
-    private static final String TF_MODEL_FILE = "har_tflite_retrain.tflite";
+//    private static final String TF_MODEL_FILE = "har_tflite_retrain.tflite";
+    private static final String TF_MODEL_FILE = "har_tflite_09716.tflite";
 
     private Interpreter interpreter;
 
